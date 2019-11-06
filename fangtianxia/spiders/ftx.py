@@ -12,14 +12,17 @@ class FtxSpider(scrapy.Spider):
     def parse(self, response):
         trs = response.xpath("//div[@class='outCont']//tr")
         province = None
+        whitelist = ['直辖市', '河北', '广东', '江苏', '四川', '山东', '浙江', '陕西', '河南']
         for tr in trs:
             tds = tr.xpath(".//td[not(@class)]")
             province_td = tds[0]
             province_text = province_td.xpath(".//text()").get()
             province_text = re.sub(r"\s", "", province_text)
             if province_text:
-                province = province_text
+                province = province_text.strip()
             if province == '其它':
+                continue
+            if province not in whitelist:
                 continue
 
             city_td = tds[1]
@@ -31,9 +34,10 @@ class FtxSpider(scrapy.Spider):
                 scheme = url_module[0]
                 domain = url_module[1]
                 if 'bj.' in domain:
-                    newhouse_url = ' http://newhouse.fang.com/house/s/'
+                    newhouse_url = 'https://bj.newhouse.fang.com/house/s/'
                 else:
                     newhouse_url = scheme + "//" + "newhouse." + domain + "house/s/"
+                print(newhouse_url.strip(), province, city)
                 yield scrapy.Request(url=newhouse_url, callback=self.parse_newhouse,
                                      meta={"info": (province, city)})
 
@@ -46,9 +50,12 @@ class FtxSpider(scrapy.Spider):
                                  callback=self.parse_new_house_step1,
                                  meta={"info": (province, city)})
 
-        next_url = response.xpath("//div[@class='page']//a[@class='next']/@href").get()
-        if next_url:
-            yield scrapy.Request(url=response.urljoin(next_url),
+        next_urls = response.xpath("//div[@class='page']//a[not(@class)]")
+        for n in next_urls:
+            next_url = n.xpath('./@href').get()
+            next_url = response.urljoin(next_url)
+            print(next_url, province, city)
+            yield scrapy.Request(url=next_url,
                                  callback=self.parse_newhouse,
                                  meta={"info": (province, city)})
 
